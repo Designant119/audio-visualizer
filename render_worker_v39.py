@@ -60,11 +60,15 @@ def text_layers(font, txt, y_top, cx, h=190):
         img = Image.new("RGB", (W, h), (0, 0, 0))
         ImageDraw.Draw(img).text((cx, 0), txt, font=font, fill=color, anchor="la", stroke_width=4, stroke_fill=(0, 0, 0))
         return np.asarray(img).astype(np.float32)
-    return layer((255, 255, 255)), layer((255, 70, 70)), layer((80, 220, 255))
+    return layer((255, 150, 60)), layer((255, 150, 60)), layer((255, 150, 60))
 
 def render_segment(part_path, start, end, seed):
     feats = np.load("assets/features.npz")
     bands = feats["bands"]; loud = feats["loud"]; sub = feats["sub"]; onset = feats["onset"]
+    # load raw PCM for real waveform
+    pcm = np.fromfile("assets/waveform.pcm", dtype=np.int16).astype(np.float32) / 32768.0
+    SR = 22050
+    wave_overview = np.load("assets/wave_overview.npy")  # (950,) normalized 0-1
     # upsample 52 bands -> 104 thin bars so the spectrum wall fills the screen
     if bands.shape[1] < 104:
         _xq = np.linspace(0, bands.shape[1] - 1, 104)
@@ -83,8 +87,8 @@ def render_segment(part_path, start, end, seed):
     rot_bg = np.zeros(F)
     for i in range(F):
         angle = angle * decay + oin[i] * K
-        rot_bg[i] = min(30.0, max(-30.0, angle))
-    rot_fg = rot_bg * 0.5  # cover & title: ±15 deg, same phase
+        rot_bg[i] = min(36.0, max(-36.0, angle))
+    rot_fg = rot_bg * 0.6  # cover & title: ±15 deg, same phase
 
     cover = Image.open("assets/cover_album_1024.jpg").convert("RGB")
     # FULL cover is always shown (never cropped). Rotation: rotate the RGBA cover
@@ -106,7 +110,7 @@ def render_segment(part_path, start, end, seed):
     aw_l, ar_l, ac_l = text_layers(font_a, "Laur", 0, 900, h=190)
     # Songs / Artists labels: RGB glitch layers
     label_font = ImageFont.truetype(FONT, 38)
-    sw_l, sr_l, sc_l = text_layers(label_font, "Songs", 0, 900, h=55)
+    sw_l, sr_l, sc_l = text_layers(label_font, "Song", 0, 900, h=55)
     aw2_l, ar2_l, ac2_l = text_layers(label_font, "Artist", 0, 900, h=55)
     font_t = ImageFont.truetype(FONT_MED, 30)
     timer_canvas = Image.new("RGBA", (110, 44), (0, 0, 0, 0))
@@ -241,9 +245,9 @@ def render_segment(part_path, start, end, seed):
             aa = 0.80 + 0.30 * loud_s[i]
             y = TY_TOP
             seg = frame[y:y + 190]
-            seg[..., 0] += red_l[..., 0] * aa * 0.95 + white_l[..., 0] * aa * 0.6
-            seg[..., 1] += white_l[..., 1] * aa * 0.6 + cyan_l[..., 1] * aa * 0.5
-            seg[..., 2] += cyan_l[..., 2] * aa * 0.95 + white_l[..., 2] * aa * 0.6
+            seg[..., 0] += white_l[..., 0] * aa * 1.0 + red_l[..., 0] * aa * 0.3
+            seg[..., 1] += white_l[..., 1] * aa * 1.0 + cyan_l[..., 1] * aa * 0.2
+            seg[..., 2] += white_l[..., 2] * aa * 1.0 + cyan_l[..., 2] * aa * 0.3
 
         tail = False  # no tailslam bonus
         gboost = 1.0
@@ -297,45 +301,52 @@ def render_segment(part_path, start, end, seed):
         if loud_s[i] > 0.04:
             aa2 = 0.70 + 0.25 * loud_s[i]
             seg_a = frame[ay0:ay0 + 190]
-            seg_a[..., 0] += ar_l[..., 0] * aa2 * 0.9 + aw_l[..., 0] * aa2 * 0.5
-            seg_a[..., 1] += aw_l[..., 1] * aa2 * 0.5 + ac_l[..., 1] * aa2 * 0.45
-            seg_a[..., 2] += ac_l[..., 2] * aa2 * 0.9 + aw_l[..., 2] * aa2 * 0.5
+            seg_a[..., 0] += aw_l[..., 0] * aa2 * 1.0 + ar_l[..., 0] * aa2 * 0.3
+            seg_a[..., 1] += aw_l[..., 1] * aa2 * 1.0 + ac_l[..., 1] * aa2 * 0.2
+            seg_a[..., 2] += aw_l[..., 2] * aa2 * 1.0 + ac_l[..., 2] * aa2 * 0.3
             # Songs label at y=175
             seg_s = frame[175:175 + 55]
-            seg_s[..., 0] += sr_l[..., 0] * aa2 * 0.9 + sw_l[..., 0] * aa2 * 0.5
-            seg_s[..., 1] += sw_l[..., 1] * aa2 * 0.5 + sc_l[..., 1] * aa2 * 0.45
-            seg_s[..., 2] += sc_l[..., 2] * aa2 * 0.9 + sw_l[..., 2] * aa2 * 0.5
+            seg_s[..., 0] += sw_l[..., 0] * aa2 * 1.0 + sr_l[..., 0] * aa2 * 0.3
+            seg_s[..., 1] += sw_l[..., 1] * aa2 * 1.0 + sc_l[..., 1] * aa2 * 0.2
+            seg_s[..., 2] += sw_l[..., 2] * aa2 * 1.0 + sc_l[..., 2] * aa2 * 0.3
             # Artists label at y=440
             seg_a2 = frame[375:375 + 55]
-            seg_a2[..., 0] += ar2_l[..., 0] * aa2 * 0.9 + aw2_l[..., 0] * aa2 * 0.5
-            seg_a2[..., 1] += aw2_l[..., 1] * aa2 * 0.5 + ac2_l[..., 1] * aa2 * 0.45
-            seg_a2[..., 2] += ac2_l[..., 2] * aa2 * 0.9 + aw2_l[..., 2] * aa2 * 0.5
-        # ---- PROGRESS BAR right of the cover (per user's screenshot: longer,
-        # lower, thicker, clearly visible): left tag = elapsed, right = remaining
+            seg_a2[..., 0] += aw2_l[..., 0] * aa2 * 1.0 + ar2_l[..., 0] * aa2 * 0.3
+            seg_a2[..., 1] += aw2_l[..., 1] * aa2 * 1.0 + ac2_l[..., 1] * aa2 * 0.2
+            seg_a2[..., 2] += aw2_l[..., 2] * aa2 * 1.0 + ac2_l[..., 2] * aa2 * 0.3
+        # ---- WAVEFORM AS PROGRESS BAR (whole song overview) ----
+        wf_x0, wf_x1 = 900, 1850
+        wf_mid = 920
+        wf_max = 45
+        p = i / F
+        cur_x = int(wf_x0 + (wf_x1 - wf_x0) * p)
+        wf_hue = (i / F * 3.0 + sub_s[i] * 0.7) % 1.0
+        wf_col = hsv2rgb(np.array([[[wf_hue, 0.8, 1.0]]], np.float32))[0, 0]
+        for j in range(len(wave_overview)):
+            px = wf_x0 + j
+            v = wave_overview[j]
+            h = int(v * wf_max)
+            if h < 1: h = 1
+            if px <= cur_x:
+                col = wf_col
+            else:
+                col = np.array([70, 70, 80], np.float32)
+            frame[wf_mid - h:wf_mid + h, px:px+1] = np.clip(
+                frame[wf_mid - h:wf_mid + h, px:px+1] * 0.2 + col * 0.8, 0, 255)
+        # playhead line
+        frame[wf_mid - wf_max - 8:wf_mid + wf_max + 8, cur_x:cur_x+2] = np.array([255,255,255], np.float32)
+
+        # time tags above waveform
         cur = i / FPS
         rem = max(0, 150.18 - cur)
-        p = i / F
-        bx0, bx1 = 900, 1850
-        by = 820
-        bh = 10
-        frame[by:by + bh, bx0:bx1] *= 0.28  # track (darker -> bar pops out)
-        fw = int((bx1 - bx0) * p)
-        if fw > 4:
-            col = np.array([255, 240, 200], np.float32) * (0.85 + 0.45 * flash)
-            seg = frame[by:by + bh, bx0:bx0 + fw]
-            a = 0.95
-            seg[..., 0] = seg[..., 0] * (1 - a) + col[0] * a
-            seg[..., 1] = seg[..., 1] * (1 - a) + col[1] * a
-            seg[..., 2] = seg[..., 2] * (1 - a) + col[2] * a
-        # time tags: left = elapsed, right = remaining
-        for ttxt, tx_c in (( "%d:%02d" % (int(cur // 60), int(cur % 60)), 940),
+        for ttxt, tx_c in (("%d:%02d" % (int(cur // 60), int(cur % 60)), 940),
                            ("%d:%02d" % (int(rem // 60), int(rem % 60)), 1780)):
             timer_canvas.paste((0, 0, 0, 0), (0, 0, 110, 44))
             ImageDraw.Draw(timer_canvas).text(
-                (55, 22), ttxt, font=font_t, fill=(255, 255, 255, 220),
+                (55, 22), ttxt, font=font_t, fill=(255, 255, 255, 230),
                 anchor="mm", stroke_width=2, stroke_fill=(0, 0, 0, 180))
             tarr = np.asarray(timer_canvas).astype(np.float32)
-            tx0 = tx_c - 55; ty0 = by - 55   # tags sit ABOVE the bar, outside its ends
+            tx0 = tx_c - 55; ty0 = 820
             seg = frame[ty0:ty0 + 44, tx0:tx0 + 110]
             al = tarr[..., 3:4] / 255.0
             seg[..., 0] = seg[..., 0] * (1 - al[..., 0]) + tarr[..., 0] * al[..., 0]

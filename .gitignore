@@ -1,14 +1,9 @@
-# 大文件/产物
-*.mp4
-*.mp3
-*.npz
-*.raw
-*.wav
-# 参考项目克隆（不是我们的代码）
-refs/
-# 临时测试帧
+# temp screenshots
+*_frame.png
+*_final.png
 test_*.mp4
-# Python
+part_v39_*.mp4
+concat.txt
+render_log.txt
 __pycache__/
-*.pyc
-.DS_Store
+*.raw
